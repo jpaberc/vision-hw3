@@ -48,6 +48,20 @@ image make_integral_image(image im)
 {
     image integ = make_image(im.w, im.h, im.c);
     // TODO: fill in the integral image
+    int c,y,x;
+    float left, top, tl;
+    for (c = 0; c < im.c; c++) {
+        for (y = 0; y < im.h; y++) {
+            for (x = 0; x < im.w; x++) {
+                left = x > 0 ? get_pixel(integ,x-1,y,c) : 0;
+                top = y > 0 ? get_pixel(integ,x,y-1,c) : 0;
+                tl = (x > 0 && y > 0) ? get_pixel(integ,x-1,y-1,c) : 0;
+
+                set_pixel(integ,x,y,c,get_pixel(im,x,y,c)+left+top-tl);
+            }
+        }
+    }
+
     return integ;
 }
 
@@ -61,6 +75,9 @@ image box_filter_image(image im, int s)
     image integ = make_integral_image(im);
     image S = make_image(im.w, im.h, im.c);
     // TODO: fill in S using the integral image.
+
+    convolve_image(integ,make_box_filter(s),1);
+
     return S;
 }
 
@@ -81,7 +98,7 @@ image time_structure_matrix(image im, image prev, int s)
     }
 
     // TODO: calculate gradients, structure components, and smooth them
-
+    image S = make_image(im.w,im.h,im.c);
 
 
 
