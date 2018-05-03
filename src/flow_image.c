@@ -72,11 +72,25 @@ image make_integral_image(image im)
 image box_filter_image(image im, int s)
 {
     int i,j,k;
+    int t,l,b,r;
     image integ = make_integral_image(im);
     image S = make_image(im.w, im.h, im.c);
     // TODO: fill in S using the integral image.
 
-    convolve_image(integ,make_box_filter(s),1);
+    for (k = 0; k < im.c; k++) {
+        for (j = 0; j < im.h; j++) {
+            t = j - (s/2);
+            b = j + (s/2);
+            for (i = 0; i < im.w; i++) {
+                l = i - (s/2);
+                r = i + (s/2);
+
+                set_pixel(S,i,j,k, get_pixel(integ,l,t,k) + get_pixel(integ,r,b,k) - get_pixel(integ,r,t,k) - get_pixel(integ,l,b,k));
+            }
+        }
+    }
+
+    free_image(integ);
 
     return S;
 }
@@ -89,7 +103,7 @@ image box_filter_image(image im, int s)
 //          3rd channel is IxIy, 4th channel is IxIt, 5th channel is IyIt.
 image time_structure_matrix(image im, image prev, int s)
 {
-    int i;
+    // int i;
     int converted = 0;
     if(im.c == 3){
         converted = 1;
@@ -98,13 +112,37 @@ image time_structure_matrix(image im, image prev, int s)
     }
 
     // TODO: calculate gradients, structure components, and smooth them
-    image S = make_image(im.w,im.h,im.c);
+    image S = make_image(im.w,im.h,5);
 
+    image Ix = convolve_image(im, make_gx_filter(), 0);
+    image Iy = convolve_image(im, make_gy_filter(), 0);
+    image It = make_image(im.w,im.h,im.c);
+    for (int y = 0; y < It.h; y++) {
+        for (int x = 0; x < It.w; x++) {
+            set_pixel(It,x,y,0,get_pixel(im,x,y,0)-get_pixel(prev,x,y,0));
+        }
+    }
 
+    for (int y = 0; y < S.h; y++) {
+        for (int x = 0; x < S.w; x++) {
+            float ix = get_pixel(Ix,x,y,0);
+            float iy = get_pixel(Iy,x,y,0);
+            float it = get_pixel(It,x,y,0);
+            set_pixel(S,x,y,0,ix*ix);
+            set_pixel(S,x,y,1,iy*iy);
+            set_pixel(S,x,y,2,ix*iy);
+            set_pixel(S,x,y,3,ix*it);
+            set_pixel(S,x,y,4,iy*it);
+        }
+    }
 
+    free_image(Ix);
+    free_image(Iy);
+    free_image(It);
     if(converted){
         free_image(im); free_image(prev);
     }
+    S = box_filter_image(S, s);
     return S;
 }
 
@@ -116,6 +154,7 @@ image velocity_image(image S, int stride)
     image v = make_image(S.w/stride, S.h/stride, 3);
     int i, j;
     matrix M = make_matrix(2,2);
+    matrix N = make_matrix(2,1);
     for(j = (stride-1)/2; j < S.h; j += stride){
         for(i = (stride-1)/2; i < S.w; i += stride){
             float Ixx = S.data[i + S.w*j + 0*S.w*S.h];
@@ -128,8 +167,28 @@ image velocity_image(image S, int stride)
             float vx = 0;
             float vy = 0;
 
+            M.data[0][0] = Ixx;
+            M.data[0][1] = Ixy;
+            M.data[1][0] = Ixy;
+            M.data[1][1] = Iyy;
+
+            N.data[0][0] = -1.0*Ixt;
+            N.data[1][0] = -1.0*Iyt;
+
+
+            matrix M_inv = matrix_invert(M);
+            if (M_inv.rows > 0) {
+                matrix V = matrix_mult_matrix(M_inv,N);
+
+                vx = V.data[0][0];
+                vy = V.data[1][0];
+                free_matrix(V);
+            }
+
             set_pixel(v, i/stride, j/stride, 0, vx);
             set_pixel(v, i/stride, j/stride, 1, vy);
+
+            free_matrix(M_inv);
         }
     }
     free_matrix(M);
